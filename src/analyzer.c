@@ -17,7 +17,6 @@ fs_info_t *analyzer_init(const char *device_path) {
     int fd = -1;
     struct ext2_super_block sb;
 
-    // Allocate memory for the filesystem info structure
     fs_info = (fs_info_t *)malloc(sizeof(fs_info_t));
     if (!fs_info) {
         perror("Failed to allocate memory for fs_info");
@@ -25,10 +24,8 @@ fs_info_t *analyzer_init(const char *device_path) {
     }
     memset(fs_info, 0, sizeof(fs_info_t));
 
-    // Open the device
     fd = open(device_path, O_RDWR);
     if (fd < 0) {
-        // Try in read-only mode if that fails
         fd = open(device_path, O_RDONLY);
         if (fd < 0) {
             perror("Failed to open device");
@@ -47,7 +44,6 @@ fs_info_t *analyzer_init(const char *device_path) {
         return NULL;
     }
 
-    // Read the superblock
     if (pread(fd, &sb, sizeof(struct ext2_super_block), 1024) != sizeof(struct ext2_super_block)) {
         perror("Failed to read superblock");
         close(fd);
@@ -56,7 +52,7 @@ fs_info_t *analyzer_init(const char *device_path) {
         return NULL;
     }
 
-    // Check magic number to ensure it's an ext filesystem
+
     if (sb.s_magic != EXT2_SUPER_MAGIC) {
         fprintf(stderr, "Not an ext2/ext3/ext4 filesystem (magic: %x, expected: %x)\n", 
                 sb.s_magic, EXT2_SUPER_MAGIC);
@@ -66,19 +62,15 @@ fs_info_t *analyzer_init(const char *device_path) {
         return NULL;
     }
 
-    // Copy superblock to our structure
     memcpy(&fs_info->sb, &sb, sizeof(struct ext2_super_block));
 
-    // Calculate block size and related values
     fs_info->block_size = 1024 << sb.s_log_block_size;
     fs_info->inodes_per_group = sb.s_inodes_per_group;
     fs_info->blocks_per_group = sb.s_blocks_per_group;
     fs_info->groups_count = (sb.s_blocks_count + sb.s_blocks_per_group - 1) / sb.s_blocks_per_group;
 
-    // Check if it's ext4
     fs_info->is_ext4 = (sb.s_feature_incompat & EXT4_FEATURE_INCOMPAT_64BIT) != 0;
 
-    // Allocate and read group descriptors
     size_t gd_size = fs_info->is_ext4 ? sizeof(struct ext2_group_desc) : 
                                      sizeof(struct ext2_group_desc);
     size_t gd_table_size = gd_size * fs_info->groups_count;
@@ -92,10 +84,9 @@ fs_info_t *analyzer_init(const char *device_path) {
         return NULL;
     }
 
-    // Group descriptors start at the first block after the superblock
     uint32_t gdt_block = (1024 / fs_info->block_size) + 1;
     
-    if (pread(fd, fs_info->group_desc, gd_table_size, gdt_block * fs_info->block_size) != gd_table_size) {
+    if (pread(fd, fs_info->group_desc, gd_table_size, gdt_block * fs_info->block_size) != (ssize_t)gd_table_size) {
         perror("Failed to read group descriptors");
         free(fs_info->group_desc);
         close(fd);
@@ -111,13 +102,20 @@ void analyzer_cleanup(fs_info_t *fs_info) {
     if (fs_info) {
         if (fs_info->fd >= 0) {
             close(fs_info->fd);
+            fs_info->fd = -1;
         }
-        free(fs_info->device_path);
-        free(fs_info->group_desc);
+        if (fs_info->device_path) {
+            free(fs_info->device_path);
+            fs_info->device_path = NULL;
+        }
+        if (fs_info->group_desc) {
+            free(fs_info->group_desc);
+            fs_info->group_desc = NULL;
+        }
         free(fs_info);
     }
 }
-
+//БЛОЧКА
 int read_block(fs_info_t *fs_info, uint32_t block_num, void *buffer) {
     if (!fs_info || !buffer || block_num <= 0 || 
         block_num >= fs_info->sb.s_blocks_count) {
@@ -134,7 +132,7 @@ int read_block(fs_info_t *fs_info, uint32_t block_num, void *buffer) {
 
     return 0;
 }
-
+//БЛОЧКА
 int write_block(fs_info_t *fs_info, uint32_t block_num, void *buffer) {
     if (!fs_info || !buffer || block_num <= 0 || 
         block_num >= fs_info->sb.s_blocks_count) {
@@ -157,16 +155,12 @@ bool is_block_allocated(fs_info_t *fs_info, uint32_t block_num) {
         return false;
     }
 
-    // Calculate the block group this block belongs to
     uint32_t group = (block_num - 1) / fs_info->blocks_per_group;
     
-    // Get the block bitmap block for this group
     uint32_t bitmap_block = fs_info->group_desc[group].bg_block_bitmap;
     
-    // Calculate the position within the group
     uint32_t position = (block_num - 1) % fs_info->blocks_per_group;
     
-    // Read the block bitmap
     unsigned char *bitmap = (unsigned char *)malloc(fs_info->block_size);
     if (!bitmap) {
         perror("Failed to allocate memory for bitmap");
@@ -178,7 +172,6 @@ bool is_block_allocated(fs_info_t *fs_info, uint32_t block_num) {
         return false;
     }
     
-    // Check if the bit is set
     bool allocated = check_bitmap_bit(bitmap, position);
     
     free(bitmap);
@@ -190,16 +183,12 @@ bool is_inode_allocated(fs_info_t *fs_info, uint32_t inode_num) {
         return false;
     }
 
-    // Calculate the block group this inode belongs to
     uint32_t group = (inode_num - 1) / fs_info->inodes_per_group;
     
-    // Get the inode bitmap block for this group
     uint32_t bitmap_block = fs_info->group_desc[group].bg_inode_bitmap;
     
-    // Calculate the position within the group
     uint32_t position = (inode_num - 1) % fs_info->inodes_per_group;
     
-    // Read the inode bitmap
     unsigned char *bitmap = (unsigned char *)malloc(fs_info->block_size);
     if (!bitmap) {
         perror("Failed to allocate memory for bitmap");
@@ -211,7 +200,6 @@ bool is_inode_allocated(fs_info_t *fs_info, uint32_t inode_num) {
         return false;
     }
     
-    // Check if the bit is set
     bool allocated = check_bitmap_bit(bitmap, position);
     
     free(bitmap);
@@ -224,20 +212,15 @@ int read_inode(fs_info_t *fs_info, uint32_t inode_num, struct ext2_inode *inode)
         return -1;
     }
 
-    // Calculate the block group this inode belongs to
     uint32_t group = (inode_num - 1) / fs_info->inodes_per_group;
     
-    // Get the inode table block for this group
     uint32_t inode_table_block = fs_info->group_desc[group].bg_inode_table;
     
-    // Calculate the index within the inode table
     uint32_t index = (inode_num - 1) % fs_info->inodes_per_group;
-    
-    // Calculate the offset within the inode table
+
     off_t offset = (off_t)inode_table_block * fs_info->block_size + 
                    (off_t)index * fs_info->sb.s_inode_size;
     
-    // Read the inode
     ssize_t bytes_read = pread(fs_info->fd, inode, sizeof(struct ext2_inode), offset);
     
     if (bytes_read != sizeof(struct ext2_inode)) {
@@ -254,20 +237,15 @@ int write_inode(fs_info_t *fs_info, uint32_t inode_num, struct ext2_inode *inode
         return -1;
     }
 
-    // Calculate the block group this inode belongs to
     uint32_t group = (inode_num - 1) / fs_info->inodes_per_group;
     
-    // Get the inode table block for this group
     uint32_t inode_table_block = fs_info->group_desc[group].bg_inode_table;
     
-    // Calculate the index within the inode table
     uint32_t index = (inode_num - 1) % fs_info->inodes_per_group;
     
-    // Calculate the offset within the inode table
     off_t offset = (off_t)inode_table_block * fs_info->block_size + 
                    (off_t)index * fs_info->sb.s_inode_size;
     
-    // Write the inode
     ssize_t bytes_written = pwrite(fs_info->fd, inode, sizeof(struct ext2_inode), offset);
     
     if (bytes_written != sizeof(struct ext2_inode)) {
@@ -283,10 +261,8 @@ int get_block_bitmap(fs_info_t *fs_info, uint32_t group_num, unsigned char *bitm
         return -1;
     }
 
-    // Get the block bitmap block for this group
     uint32_t bitmap_block = fs_info->group_desc[group_num].bg_block_bitmap;
     
-    // Read the block bitmap
     if (read_block(fs_info, bitmap_block, bitmap) != 0) {
         return -1;
     }
@@ -299,10 +275,8 @@ int get_inode_bitmap(fs_info_t *fs_info, uint32_t group_num, unsigned char *bitm
         return -1;
     }
 
-    // Get the inode bitmap block for this group
     uint32_t bitmap_block = fs_info->group_desc[group_num].bg_inode_bitmap;
     
-    // Read the inode bitmap
     if (read_block(fs_info, bitmap_block, bitmap) != 0) {
         return -1;
     }

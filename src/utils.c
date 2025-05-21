@@ -234,6 +234,8 @@ void inode_to_string(const struct ext2_inode *inode, char *buffer, size_t buffer
     buffer[buffer_size - 1] = '\0';
 }
 
+
+//БЛОЧКА
 void get_fs_type_string(const fs_info_t *fs_info, char *buffer, size_t buffer_size) {
     if (!fs_info || !buffer || buffer_size <= 0) {
         return;
@@ -248,28 +250,4 @@ void get_fs_type_string(const fs_info_t *fs_info, char *buffer, size_t buffer_si
     }
     
     buffer[buffer_size - 1] = '\0';
-}
-
-void log_message(const char *format, ...) {
-    FILE *log_file = fopen("ext2edit.log", "a");
-    if (!log_file) {
-        return;
-    }
-    
-    time_t now = time(NULL);
-    struct tm *tm_now = localtime(&now);
-    
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", tm_now);
-    
-    fprintf(log_file, "[%s] ", timestamp);
-    
-    va_list args;
-    va_start(args, format);
-    vfprintf(log_file, format, args);
-    va_end(args);
-    
-    fprintf(log_file, "\n");
-    
-    fclose(log_file);
 }
