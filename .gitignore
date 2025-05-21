@@ -1,0 +1,53 @@
+
+# Игнорировать скомпилированные объектные файлы и исполняемые файлы
+*.o
+*.out
+*.exe
+
+# Игнорировать статические и динамические библиотеки
+*.a
+*.so
+*.dll
+*.lib
+*.dylib
+
+# Игнорировать временные файлы и логи
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Игнорировать директории сборки и бинарные файлы
+/build/
+/dist/
+/bin/
+/obj/
+/out/
+/debug/
+/release/
+
+# Игнорировать файлы и директории, связанные с IDE и редакторами
+.vscode/
+.idea/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+*.user
+*.suo
+*.sdf
+
+# Игнорировать системные файлы
+.DS_Store
+*.directory
+Thumbs.db
+
+# Игнорировать файлы, специфичные для CMake (если используется)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Игнорировать файлы, специфичные для автосгенерированных файлов (например, от Flex/Bison)
+*.yy.c
+*.tab.c
+*.tab.h
